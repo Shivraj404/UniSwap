@@ -16,8 +16,16 @@ type User = {
   year?: string;
 };
 
+type MyListing = {
+  _id: string;
+  title: string;
+  price: number;
+  category: string;
+  status: "available" | "sold";
+  images?: string[];
+};
+
 const menuItems = [
-  { title: "Notifications", description: "Manage your marketplace alerts" },
   { title: "Privacy & Security", description: "Manage your account security" },
 ];
 
@@ -30,6 +38,37 @@ export default function ProfilePage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState<User>({});
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
+  const [myListings, setMyListings] = useState<MyListing[]>([]);
+  const [loadingListings, setLoadingListings] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const loadMyListings = () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setLoadingListings(true);
+    fetch(`${API_URL}/listings/mine`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => (res.ok ? res.json() : { listings: [] }))
+      .then((data) => setMyListings(data.listings || []))
+      .catch(() => setMyListings([]))
+      .finally(() => setLoadingListings(false));
+  };
+
+  const handleDeleteListing = async (id: string) => {
+    if (!confirm("Delete this listing? This can't be undone.")) return;
+    setDeletingId(id);
+    try {
+      const token = localStorage.getItem("token");
+      await fetch(`${API_URL}/listings/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setMyListings((prev) => prev.filter((l) => l._id !== id));
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -71,6 +110,8 @@ export default function ProfilePage() {
         setPendingOrderCount(pending.length);
       })
       .catch(() => setPendingOrderCount(0));
+
+    loadMyListings();
   }, [router]);
 
   const handleLogout = () => {
@@ -183,6 +224,23 @@ export default function ProfilePage() {
           <p className="mt-2 text-lg text-ink-soft">Manage your UniSwap account and marketplace activity.</p>
         </div>
 
+        {pendingOrderCount > 0 && (
+          <Link
+            href="/orders?tab=selling"
+            className="mb-8 flex items-center justify-between rounded-lg border border-accent/30 bg-accent-soft px-6 py-4 transition hover:border-accent"
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-bold text-paper">
+                {pendingOrderCount}
+              </span>
+              <p className="font-medium text-ink">
+                You have {pendingOrderCount} new order{pendingOrderCount > 1 ? "s" : ""} on your listings
+              </p>
+            </div>
+            <span className="text-sm font-semibold text-accent">View orders →</span>
+          </Link>
+        )}
+
         {/* PROFILE CARD */}
         <section className="rounded-lg border border-line bg-surface p-8">
           {!editing ? (
@@ -287,19 +345,68 @@ export default function ProfilePage() {
             </Link>
           </div>
 
-          <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-14 text-center">
-            <h3 className="font-display text-xl font-medium">No listings yet</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink-soft">
-              Have books, electronics, furniture or other items you no longer
-              need? List them on UniSwap and help another student.
-            </p>
-            <Link
-              href="/sell"
-              className="mt-6 inline-flex rounded-md bg-brand px-6 py-3 font-semibold text-paper transition hover:bg-brand-dark"
-            >
-              + Sell an item
-            </Link>
-          </div>
+          {loadingListings ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[1, 2].map((i) => (
+                <div key={i} className="h-24 animate-pulse rounded-lg border border-line bg-surface" />
+              ))}
+            </div>
+          ) : myListings.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-line bg-surface px-6 py-14 text-center">
+              <h3 className="font-display text-xl font-medium">No listings yet</h3>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-ink-soft">
+                Have books, electronics, furniture or other items you no longer
+                need? List them on UniSwap and help another student.
+              </p>
+              <Link
+                href="/sell"
+                className="mt-6 inline-flex rounded-md bg-brand px-6 py-3 font-semibold text-paper transition hover:bg-brand-dark"
+              >
+                + Sell an item
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myListings.map((listing) => (
+                <div
+                  key={listing._id}
+                  className="flex items-center gap-4 rounded-lg border border-line bg-surface p-4"
+                >
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border border-line bg-paper">
+                    {listing.images?.[0] ? (
+                      <Image src={listing.images[0]} alt={listing.title} fill className="object-contain" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-xl">📦</div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-ink">{listing.title}</p>
+                    <p className="text-sm text-ink-faint">₹{listing.price} · {listing.category}</p>
+                  </div>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      listing.status === "sold" ? "bg-danger-soft text-danger" : "bg-brand-soft text-brand"
+                    }`}
+                  >
+                    {listing.status === "sold" ? "Sold" : "Available"}
+                  </span>
+                  <Link
+                    href={`/listings/${listing._id}/edit`}
+                    className="rounded-md border border-line px-3 py-2 text-xs font-semibold text-ink-soft transition hover:border-brand hover:text-brand"
+                  >
+                    Edit
+                  </Link>
+                  <button
+                    onClick={() => handleDeleteListing(listing._id)}
+                    disabled={deletingId === listing._id}
+                    className="rounded-md border border-line px-3 py-2 text-xs font-semibold text-ink-soft transition hover:border-danger hover:text-danger disabled:opacity-50"
+                  >
+                    {deletingId === listing._id ? "…" : "Delete"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* ACCOUNT SETTINGS */}
@@ -310,6 +417,27 @@ export default function ProfilePage() {
           </div>
 
           <div className="overflow-hidden rounded-lg border border-line bg-surface">
+            <Link
+              href="/orders?tab=selling"
+              className="flex w-full items-center justify-between border-b border-line p-5 text-left transition hover:bg-paper"
+            >
+              <div>
+                <p className="font-medium text-ink">Incoming orders</p>
+                <p className="mt-1 text-sm text-ink-faint">
+                  {pendingOrderCount > 0
+                    ? `${pendingOrderCount} order${pendingOrderCount > 1 ? "s" : ""} waiting on you`
+                    : "See orders placed on your listings"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {pendingOrderCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1.5 text-xs font-bold text-paper">
+                    {pendingOrderCount}
+                  </span>
+                )}
+                <span className="text-ink-faint">→</span>
+              </div>
+            </Link>
             {menuItems.map((item) => (
               <button
                 key={item.title}

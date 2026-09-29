@@ -2,6 +2,7 @@
 
 import { AnimatedTabsHover } from "@/components/animated-tabs-hover";
 import { ListingModal } from "@/components/listing-modal";
+import { ThemeToggle } from "@/components/theme-toggle";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -201,6 +202,7 @@ export default function Home() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             {isLoggedIn ? (
               <>
                 <Link
@@ -508,7 +510,7 @@ export default function Home() {
                         src={listing.images[0]}
                         alt={listing.title}
                         fill
-                        className="object-cover transition duration-500 group-hover:scale-105"
+                        className="object-contain transition duration-500 group-hover:scale-105"
                       />
                     ) : (
                       <span className="text-6xl">
@@ -651,7 +653,7 @@ export default function Home() {
             {[
               { q: "Is UniSwap free to use?", a: "Yes — listing an item, browsing, and messaging sellers are all free." },
               { q: "How does payment work?", a: "Cash on Delivery only. You confirm an order online, then pay in person when you meet the seller to pick up the item — UniSwap never handles the money." },
-              { q: "What if an item is already sold?", a: "Sold listings are automatically removed from the marketplace the moment an order is placed on them, so you should never see a listing that's no longer available." },
+              { q: "What if an item is already sold?", a: "Sold items are automatically removed from the marketplace the moment an order is placed on them, so you should never see a listing that's no longer available." },
               { q: "Can I sell to students outside my college?", a: "UniSwap is built around in-person pickup, so it works best within the same campus or city — always agree on a realistic meeting point before ordering." },
               { q: "What happens if I need to cancel an order?", a: "Sellers can cancel an order from their Orders page, which automatically relists the item so it's available to other buyers again." },
             ].map((item) => (

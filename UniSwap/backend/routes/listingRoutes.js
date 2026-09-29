@@ -64,6 +64,26 @@ router.post("/", authMiddleware, upload.array("images", 5), async (req, res) => 
   }
 });
 
+// GET MY LISTINGS (any status — available or sold) for the seller dashboard.
+// IMPORTANT: this must be declared before GET /:id, otherwise Express
+// matches "mine" as the :id parameter and this route never gets hit.
+router.get("/mine", authMiddleware, async (req, res) => {
+  try {
+    const listings = await Listing.find({ seller: req.user.userId })
+      .populate("seller", "name email college phone")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      message: "Your listings fetched successfully",
+      count: listings.length,
+      listings,
+    });
+  } catch (error) {
+    console.error("Get my listings error:", error);
+    res.status(500).json({ message: "Failed to fetch your listings" });
+  }
+});
+
 // GET ALL LISTINGS WITH SEARCH AND FILTER
 router.get("/", async (req, res) => {
   try {
@@ -104,7 +124,7 @@ router.get("/", async (req, res) => {
 });
 
 // GET SINGLE LISTING (used by the Buy Now detail popup as a fallback,
-// and useful for direct-link sharing later)
+// the edit-listing page, and direct-link sharing)
 router.get("/:id", async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id).populate(
@@ -120,6 +140,77 @@ router.get("/:id", async (req, res) => {
   } catch (error) {
     console.error("Get listing error:", error);
     res.status(500).json({ message: "Failed to fetch listing" });
+  }
+});
+
+// UPDATE LISTING — owner only. Accepts multipart/form-data; if new images
+// are included they replace the old set, otherwise existing images are kept.
+router.put("/:id", authMiddleware, upload.array("images", 5), async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+
+    if (!listing) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
+
+    // Ownership check — this is the actual security boundary. Any
+    // client-side "is this my listing?" check is just UX; this is what
+    // stops someone else from editing your listing via a direct API call.
+    if (String(listing.seller) !== String(req.user.userId)) {
+      return res.status(403).json({
+        message: "You can only edit your own listings",
+      });
+    }
+
+    const { title, description, price, category, condition, location } = req.body;
+
+    if (title !== undefined) listing.title = title;
+    if (description !== undefined) listing.description = description;
+    if (price !== undefined) listing.price = price;
+    if (category !== undefined) listing.category = category;
+    if (condition !== undefined) listing.condition = condition;
+    if (location !== undefined) listing.location = location;
+
+    if (req.files && req.files.length > 0) {
+      listing.images = req.files.map(
+        (file) => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`
+      );
+    }
+
+    await listing.save();
+    const populated = await listing.populate("seller", "name email college phone");
+
+    res.status(200).json({
+      message: "Listing updated successfully",
+      listing: populated,
+    });
+  } catch (error) {
+    console.error("Update listing error:", error);
+    res.status(500).json({ message: "Failed to update listing", error: error.message });
+  }
+});
+
+// DELETE LISTING — owner only.
+router.delete("/:id", authMiddleware, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+
+    if (!listing) {
+      return res.status(404).json({ message: "Listing not found" });
+    }
+
+    if (String(listing.seller) !== String(req.user.userId)) {
+      return res.status(403).json({
+        message: "You can only delete your own listings",
+      });
+    }
+
+    await listing.deleteOne();
+
+    res.status(200).json({ message: "Listing deleted successfully" });
+  } catch (error) {
+    console.error("Delete listing error:", error);
+    res.status(500).json({ message: "Failed to delete listing" });
   }
 });
 

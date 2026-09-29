@@ -58,7 +58,7 @@ export function ListingModal({
                 src={images[activeImage]}
                 alt={listing.title}
                 fill
-                className="object-cover"
+                className="object-contain"
               />
             ) : (
               <span className="text-7xl">
